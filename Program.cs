@@ -1,77 +1,65 @@
-﻿using Azure;
-using Azure.AI.OpenAI.Assistants;
+﻿using Azure.AI.OpenAI;
+using OpenAI.Assistants;
 
-// Azure OpenAI service
-var client = new AssistantsClient(new Uri("https://your-azure-openai-service.openai.azure.com/"), 
-new AzureKeyCredential("azure-openai-api-key"));
+AzureOpenAIClient azureClient = new(
+            new Uri("https://your-deployment-url.openai.azure.com/"),
+            new Azure.AzureKeyCredential("your azure open ai api key"));
 
-// OpenAI API
-// var client = new AssistantsClient("standard OpenAI key");
+#pragma warning disable OPENAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+var client = azureClient.GetAssistantClient();
+#pragma warning restore OPENAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
-if (args.Length < 1) {
-    Console.WriteLine("Provide a file path as the first argument or drag and drop onto the binary");
-    return;
-}
+var filename = args[0];
 
 // For Azure OpenAI service the model name is the "deployment" name
-var assistantCreationOptions = new AssistantCreationOptions("gpt-4")
+var assistantCreationOptions = new AssistantCreationOptions
 {
     Name = "File question answerer",
-    Instructions = "Answer questions from the user about the provided file. " +
-    "For PDF files, immediately use PyPDF2 to extract the text contents and answer quesions based on that.",
-    Tools = { new CodeInterpreterToolDefinition() },
+    Instructions = "Answer questions from the user about the provided file.",
+    Tools = { ToolDefinition.CreateFileSearch() },
 };
 
+var assistant = await client.CreateAssistantAsync("gpt4-assistant2", assistantCreationOptions);
 
-var fileUploadResponse = await client.UploadFileAsync(args[0], OpenAIFilePurpose.Assistants);
-assistantCreationOptions.FileIds.Add(fileUploadResponse.Value.Id);
+var fileUploadResponse = await azureClient.GetFileClient().UploadFileAsync(File.Open(filename, FileMode.Open), 
+System.IO.Path.GetFileName(filename), OpenAI.Files.FileUploadPurpose.Assistants);
 Console.WriteLine($"Uploaded file {fileUploadResponse.Value.Filename}");
-
-assistantCreationOptions.Instructions += $" The file with id {fileUploadResponse.Value.Id} " +
-$"has a original filename of {Path.GetFileName(args[0])} and is " +
-$" a {Path.GetExtension(args[0]).Replace(".",string.Empty)} file.";
-
-var assistant = await client.CreateAssistantAsync(assistantCreationOptions);
-var thread = await client.CreateThreadAsync();
 
 Console.WriteLine("Ask a question about the file (empty response to quit):");
 var question = Console.ReadLine();
 
+var thread = await client.CreateThreadAsync();
+
+
 while (!string.IsNullOrWhiteSpace(question))
 {
-    string? lastMessageId = null;
+    var messageCreationOptions = new MessageCreationOptions();
+    messageCreationOptions.Attachments.Add(new MessageCreationAttachment(fileUploadResponse.Value.Id, new List<ToolDefinition>() {ToolDefinition.CreateFileSearch()}));
 
-    await client.CreateMessageAsync(thread.Value.Id, MessageRole.User, question);
-    var run = await client.CreateRunAsync(thread.Value.Id, new CreateRunOptions(assistant.Value.Id));
-    Response<ThreadRun> runResponse;
+    await client.CreateMessageAsync(thread, new List<MessageContent>() { MessageContent.FromText(question)}, messageCreationOptions);
 
-    do {
-        await Task.Delay(TimeSpan.FromMilliseconds(1000));
-        runResponse = await client.GetRunAsync(thread.Value.Id, run.Value.Id);
-        Console.Write(".");
-    } while (runResponse.Value.Status == RunStatus.Queued
-            || runResponse.Value.Status == RunStatus.InProgress);
-    
-    Console.WriteLine(string.Empty);
-
-    var messageResponse = await client.GetMessagesAsync(thread.Value.Id, order: ListSortOrder.Ascending, after: lastMessageId);
-
-    foreach(var message in messageResponse.Value.Data)
-    {
-        lastMessageId = message.Id;
-        foreach(var content in message.ContentItems)
+    await foreach (StreamingUpdate streamingUpdate
+            in client.CreateRunStreamingAsync(thread, assistant, new RunCreationOptions()))
         {
-            if (content is MessageTextContent textContent)
+            if (streamingUpdate.UpdateKind == StreamingUpdateReason.RunCreated)
             {
-                if (textContent.Text != question)
-                {
-                    Console.WriteLine(textContent.Text);
-                }
-                
+                Console.WriteLine($"--- Run started! ---");
             }
+            
+            else if (streamingUpdate is MessageContentUpdate contentUpdate)
+            {
+                if (contentUpdate?.TextAnnotation?.InputFileId == fileUploadResponse.Value.Id)
+                {
+                    Console.Write(" (From: " + fileUploadResponse.Value.Filename + ")");
+                } 
+                else 
+                {
+                    Console.Write(contentUpdate?.Text);
+                }
+            } 
         }
-    }
 
+    Console.WriteLine();
     Console.WriteLine("Your response: (leave empty to quit)");
     question = Console.ReadLine();
 
@@ -79,6 +67,6 @@ while (!string.IsNullOrWhiteSpace(question))
 
 // clean up the file and assistant
 Console.WriteLine("Cleaning up and exiting...");
-await client.DeleteFileAsync(fileUploadResponse.Value.Id);
+await azureClient.GetFileClient().DeleteFileAsync(fileUploadResponse.Value.Id);
 await client.DeleteThreadAsync(thread.Value.Id);
 await client.DeleteAssistantAsync(assistant.Value.Id);

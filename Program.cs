@@ -19,6 +19,7 @@ var assistantCreationOptions = new AssistantCreationOptions
     Tools = { ToolDefinition.CreateFileSearch() },
 };
 
+// model name here is the name of your AOAI deployment
 var assistant = await client.CreateAssistantAsync("gpt4-assistant2", assistantCreationOptions);
 
 var fileUploadResponse = await azureClient.GetFileClient().UploadFileAsync(File.Open(filename, FileMode.Open), 

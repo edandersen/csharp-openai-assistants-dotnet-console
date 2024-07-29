@@ -1,4 +1,4 @@
-# C# / .NET OpenAI GPT-4 Assistant for Local File Analysis
+# C# / .NET OpenAI GPT-4 Assistant for Local File Search
 
 This is small sample project that shows you how to:
 

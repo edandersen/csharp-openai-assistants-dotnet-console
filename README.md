@@ -3,6 +3,7 @@
 This is small sample project that shows you how to:
 
 - upload local files to the OpenAI GPT-4 Assistant service on either Azure OpenAI service or the OpenAI API
+- Use the File Search tool on Azure OpenAI Service
 - Ask natural language questions about the file
 - Keep the conversation thread active for follow up questions
 

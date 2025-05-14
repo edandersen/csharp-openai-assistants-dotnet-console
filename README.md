@@ -9,9 +9,8 @@ This is small sample project that shows you how to:
 
 Presented as a single Program.cs .NET 8.0 Console app.
 
+You can watch a live recording of developing this project, step-by-step, here: [OpenAI Assistant API for File Analysis - Full C# / .NET Code Tutorial](https://www.youtube.com/watch?v=FDDpkm9vCAI)
+
 <img width="1264" alt="Screenshot 2024-04-13 at 15 42 25" src="https://github.com/edandersen/csharp-openai-assistants-dotnet-console/assets/548636/d071d28d-653d-4e07-b6fe-ccdbf8ff3781">
 
 To use the compiled app, the first parameter must be that to a local file, or on Windows you can drag and drop the file onto the compiled .exe. Tested pretty extensively with PDF files.
-
-
-
